@@ -1,15 +1,26 @@
 import json
 import logging
 from bisect import bisect_left
+from urllib3.util.retry import Retry
 
 import envparse
+import requests
 from envparse import env
+from requests.adapters import HTTPAdapter
+from requests.exceptions import ConnectionError
 
 
 envparse.env.read_envfile()
 
-
 PASS_KEY = env('PASS_KEY')
+
+session = requests.Session()
+
+retries = Retry(total=5,
+                backoff_factor=0.1,
+                status_forcelist=[ 500, 502, 503, 504 ])
+
+session.mount('http://', HTTPAdapter(max_retries=retries))
 
 
 def get_serial_numbers():
@@ -27,7 +38,7 @@ def get_progress():
         pass
     except:
         logging.exception('Error while reading progress')
-    return []
+    return {}
 
 
 def binary_search(t, key, low=0, high=None):
@@ -51,10 +62,48 @@ def get_elector(electors, serial_number):
         return electors[position]
 
 
+def save_progress(progress):
+    with open('progress.json', 'w') as fi:
+        fi.write(json.dumps(progress))
+
+
+def verify_elector(elector, progress):
+    if str(elector['SLNO_INPART']) in progress:
+        return True
+    print(f"\n\nVerifying { elector['SLNO_INPART'] }. { elector['EPIC_NO'] }. { elector['FM_NAME_EN'] } ...")
+
+    try:
+        response = session.post(
+            'http://evpservices.ecinet.in/api/EVP/PostElectorVerificationStatus?st_code=S24&ac_no=75&part_no=27',
+            headers={'pass_key': PASS_KEY},
+            data={'EPIC_NO': elector['EPIC_NO']}
+        )
+    except ConnectionError:
+        print('\t Failed: ConnectionError')
+        return False
+
+    verified = response.status_code == 200 and response.json()['IsSuccess'] is True
+
+    if verified:
+        print(f"\tVerified { elector['EPIC_NO'] }")
+        progress[str(elector['SLNO_INPART'])] = elector
+        save_progress(progress)
+    else:
+        print(f"\t Failed: { response.status_code } { response.content }")
+
+    return verified
+
+
+def verify(electors, serial_numbers, progress):
+    for number in serial_numbers:
+        elector = get_elector(electors, number)
+        verify_elector(elector, progress)
+    
+    print('\n\nCompleted')
+
+
 if __name__ == '__main__':
     serial_numbers = get_serial_numbers()
     electors = get_electors()
     progress = get_progress()
-    print(PASS_KEY, serial_numbers, progress, len(electors), len(serial_numbers))
-    for number in serial_numbers:
-        get_elector(electors, number)
+    verify(electors, serial_numbers, progress)
