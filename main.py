@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from bisect import bisect_left
 from urllib3.util.retry import Retry
 
@@ -16,9 +17,8 @@ PASS_KEY = env('PASS_KEY')
 
 session = requests.Session()
 
-retries = Retry(total=5,
-                backoff_factor=0.1,
-                status_forcelist=[ 500, 502, 503, 504 ])
+retries = Retry(total=15,
+                backoff_factor=0.1)
 
 session.mount('http://', HTTPAdapter(max_retries=retries))
 
@@ -73,10 +73,21 @@ def verify_elector(elector, progress):
     print(f"\n\nVerifying { elector['SLNO_INPART'] }. { elector['EPIC_NO'] }. { elector['FM_NAME_EN'] } ...")
 
     try:
+        data = {
+            "STATE_CODE": "S24",
+            "AC_NO": "75",
+            "PART_NO": "27",
+            "SLNO_INPART": str(elector['SLNO_INPART']),
+            "EPIC_NO": elector['EPIC_NO']
+        }
+
         response = session.post(
             'http://evpservices.ecinet.in/api/EVP/PostElectorVerificationStatus?st_code=S24&ac_no=75&part_no=27',
-            headers={'pass_key': PASS_KEY},
-            data={'EPIC_NO': elector['EPIC_NO']}
+            headers={
+                'pass_key': PASS_KEY,
+                'Content-Type': "application/json",
+            },
+            data=json.dumps(data)
         )
     except ConnectionError:
         print('\t Failed: ConnectionError')
