@@ -27,6 +27,10 @@ def get_serial_numbers():
     return list(map(int, open('sl.txt').read().splitlines()))
 
 
+def get_exception_serial_numbers():
+    return list(map(int, open('except.txt').read().splitlines()))
+
+
 def get_electors():
     return json.loads(open('response.json').read())
 
@@ -118,3 +122,24 @@ if __name__ == '__main__':
     electors = get_electors()
     progress = get_progress()
     verify(electors, serial_numbers, progress)
+
+    all_numbers = {e['SLNO_INPART'] for e in electors}
+    verified_numbers = {int(n) for n in progress.keys()}
+    unverified_set = all_numbers.difference(verified_numbers)
+    
+    exception_set = set(get_exception_serial_numbers())
+
+    to_verify_set = unverified_set.difference(exception_set)
+
+    to_verify = list(to_verify_set)
+    to_verify.sort()
+    print(len(to_verify_set), to_verify)
+
+    verify(electors, to_verify, progress)
+
+    unverified = list(unverified_set)
+    unverified.sort()
+    for un in unverified:
+        elector = get_elector(electors, un)
+        print(f"{ elector['SLNO_INPART'] }. { elector['EPIC_NO'] }. { elector['FM_NAME_EN'] }")
+    print(len(all_numbers), len(verified_numbers), len(unverified), len(electors))

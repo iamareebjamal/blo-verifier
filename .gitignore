@@ -107,4 +107,6 @@ venv.bak/
 
 response.json
 sl.txt
+except.txt
 progress.json
+test.json
